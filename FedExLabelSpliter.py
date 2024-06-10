@@ -3,7 +3,6 @@
 
 # In[3]:
 
-pip install PyPDF2
 import os
 import re
 import PyPDF2
