@@ -1,29 +1,46 @@
 import streamlit as st
 import os
 import re
+from PyPDF2 import PdfReader, PdfWriter
 from io import BytesIO
 from zipfile import ZipFile
 
 def split_labels(file):
-    # Create a folder with the same name as the input file (without extension)
+    reader = PdfReader(file)
+    num_pages = len(reader.pages)
+    
+    # Folder name based on the input file name without extension
     folder_name = os.path.splitext(file.name)[0]
     if not os.path.exists(folder_name):
         os.mkdir(folder_name)
 
-    content = file.read().decode('utf-8')
-    labels = re.split(r'(?:\n|^)(\d{4} \d{4} \d{4})(?:\n|$)', content)
+    labels = {}
+    for i in range(num_pages):
+        page = reader.pages[i]
+        text = page.extract_text()
+        
+        # Extract tracking number from the text
+        match = re.search(r'\b\d{4} \d{4} \d{4}\b', text)
+        if match:
+            tracking_number = match.group(0).replace(" ", "")
+            if tracking_number not in labels:
+                labels[tracking_number] = []
+            labels[tracking_number].append(i)
 
-    for i in range(1, len(labels), 2):
-        tracking_number = labels[i].replace(" ", "")
-        label_content = labels[i + 1].strip()
-        with open(os.path.join(folder_name, f"{tracking_number}.txt"), 'w') as label_file:
-            label_file.write(f"{tracking_number}\n{label_content}")
+    for tracking_number, pages in labels.items():
+        writer = PdfWriter()
+        for page_num in pages:
+            writer.add_page(reader.pages[page_num])
+        
+        label_path = os.path.join(folder_name, f"{tracking_number}.pdf")
+        with open(label_path, 'wb') as label_file:
+            writer.write(label_file)
 
     return folder_name
 
 st.title("FedEx Ground Label Splitter")
 
-uploaded_file = st.file_uploader("Upload a consolidated FedEx Ground Label file", type=["txt"])
+uploaded_file = st.file_uploader("Upload a consolidated FedEx Ground Label PDF file", type=["pdf"])
 
 if uploaded_file is not None:
     folder_name = split_labels(uploaded_file)
